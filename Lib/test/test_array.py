@@ -14,6 +14,14 @@ import warnings
 import array
 from array import _array_reconstructor as array_reconstructor
 
+try:
+    # Try to determine availability of long long independently
+    # of the array module under test
+    struct.calcsize('@q')
+    have_long_long = True
+except struct.error:
+    have_long_long = False
+
 sizeof_wchar = array.array('u').itemsize
 
 
@@ -24,7 +32,9 @@ class ArraySubclassWithKwargs(array.array):
     def __init__(self, typecode, newarg=None):
         array.array.__init__(self)
 
-typecodes = 'ubBhHiIlLfdqQ'
+typecodes = "ubBhHiIlLfd"
+if have_long_long:
+    typecodes += 'qQ'
 
 class MiscTest(unittest.TestCase):
 
@@ -1230,26 +1240,7 @@ class NumberTest(BaseTest):
         b = array.array(self.typecode, a)
         self.assertEqual(a, b)
 
-class IntegerNumberTest(NumberTest):
-    def test_type_error(self):
-        a = array.array(self.typecode)
-        a.append(42)
-        with self.assertRaises(TypeError):
-            a.append(42.0)
-        with self.assertRaises(TypeError):
-            a[0] = 42.0
-
-class Intable:
-    def __init__(self, num):
-        self._num = num
-    def __int__(self):
-        return self._num
-    def __sub__(self, other):
-        return Intable(int(self) - int(other))
-    def __add__(self, other):
-        return Intable(int(self) + int(other))
-
-class SignedNumberTest(IntegerNumberTest):
+class SignedNumberTest(NumberTest):
     example = [-1, 0, 1, 42, 0x7f]
     smallerexample = [-1, 0, 1, 42, 0x7e]
     biggerexample = [-1, 0, 1, 43, 0x7f]
@@ -1260,9 +1251,8 @@ class SignedNumberTest(IntegerNumberTest):
         lower = -1 * int(pow(2, a.itemsize * 8 - 1))
         upper = int(pow(2, a.itemsize * 8 - 1)) - 1
         self.check_overflow(lower, upper)
-        self.check_overflow(Intable(lower), Intable(upper))
 
-class UnsignedNumberTest(IntegerNumberTest):
+class UnsignedNumberTest(NumberTest):
     example = [0, 1, 17, 23, 42, 0xff]
     smallerexample = [0, 1, 17, 23, 42, 0xfe]
     biggerexample = [0, 1, 17, 23, 43, 0xff]
@@ -1273,7 +1263,6 @@ class UnsignedNumberTest(IntegerNumberTest):
         lower = 0
         upper = int(pow(2, a.itemsize * 8)) - 1
         self.check_overflow(lower, upper)
-        self.check_overflow(Intable(lower), Intable(upper))
 
     def test_bytes_extend(self):
         s = bytes(self.example)
@@ -1325,10 +1314,12 @@ class UnsignedLongTest(UnsignedNumberTest, unittest.TestCase):
     typecode = 'L'
     minitemsize = 4
 
+@unittest.skipIf(not have_long_long, 'need long long support')
 class LongLongTest(SignedNumberTest, unittest.TestCase):
     typecode = 'q'
     minitemsize = 8
 
+@unittest.skipIf(not have_long_long, 'need long long support')
 class UnsignedLongLongTest(UnsignedNumberTest, unittest.TestCase):
     typecode = 'Q'
     minitemsize = 8
